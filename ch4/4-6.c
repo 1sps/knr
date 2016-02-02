@@ -1,0 +1,909 @@
+/*Ex 4-6, K&R 2nd, :___: 2016-01-29 Fri 01:54 PM*/
+/*C program to implement a reverse polish calculator*/
+/*Extensions in this Excercise:
+  1. Support for 26 variables {a..z}
+  2. No result is printed if any error occurs
+  *. ^This is not mentioned in the excercise question
+*/
+/*__________________________________________________*/
+
+/*Header files*/
+#include<stdio.h>
+#include<stdlib.h>
+#include<math.h>
+
+/*Constants*/
+/*Max size of operand or operator*/
+#define MAXOP 100
+/*Signal that number was found*/
+#define NUMBER '\0'
+/*Signal that library math function found*/
+#define MATH 200
+/*Signal that VARIABLE found*/
+#define VARIABLE 300
+/*Signal that variable assignment performed*/
+#define ASSIGN 301
+/*Signal that variable assignment NOT performed*/
+#define NO_ASSIGN 302
+/*Signal that error occured*/
+#define ERROR 401
+/*Signal that NO error occured*/
+#define NO_ERROR 402
+/*For debugging*/
+#define SKIP
+
+/*Function protoypes*/
+int getop(char[]);
+void push(double);
+double pop(void);
+void stackop(int command);
+void lmath(const char s[]);
+int varop(const char s[]);
+
+/*External variables*/
+/*Variable that holds 
+  recently printed value
+*/
+double recent_print=0.0;
+/*Variable to indicate if any
+  error occured
+*/
+int error=NO_ERROR;
+
+/*Program starts*/
+/*Reverse polish calculator*/
+int main(void)
+{
+	/*Automatic Variables*/
+	int type;
+	double op2, op1;
+	char s[MAXOP];
+	/*This variable indicates if the recent variable
+	  operation was a variable assignment or not :
+	  0 -> normal variable operation
+	  1 -> variable assignment operation
+	*/
+	int varopType=NO_ASSIGN;
+	/*Holds the result*/
+	double result;
+
+	/*Get input untill user quits*/
+	while((type = getop(s)) != EOF)
+	{
+		switch(type)
+		{
+			/*Operand*/
+			case NUMBER:
+				push(atof(s));
+				break;
+
+			/*Addition*/
+			case '+':
+				/*printf("Add\n");*/
+				push(pop() + pop());
+				break;
+
+			/*Multiplication*/
+			case '*':
+				/*printf("mult\n");*/
+				push(pop() * pop());
+				break;
+
+			/*Subtraction*/
+			case '-':
+				/*printf("sub\n");*/
+				op2 = pop();
+				push(pop() - op2);
+				break;
+
+			/*Division*/
+			case '/':
+				op2 = pop();
+				if(op2!=0)
+					push(pop() / op2);
+				else
+				{
+					printf("error: division by zero\n");
+					error = ERROR;
+				}
+				break;
+
+			/*Modulus division*/
+			case '%':
+				/*printf("mdiv\n");*/
+				op2 = pop();
+				op1 = pop();
+				if(op2!=0)
+						/*Not a good way to check if the number is int*/
+						/*However used - to move on for now*/
+						if(op1==(int)op1 && op2==(int)op2)
+							push((int) op1 % (int) op2);
+						else
+						{
+							printf("error: %% has non integer operand\n");
+							error = ERROR;
+						}
+				else
+				{
+					printf("error: modulus division by zero\n");
+					error = ERROR;
+				}
+				break;
+
+			/*Stack operation commands*/
+			case '!':
+			case '@':
+			case '#':
+			case '$':
+				stackop(type);
+				break;
+
+			/*Math library commands*/
+			case MATH:
+				lmath(s);
+				break;
+
+			/*Added for Ex 4-6*/
+			/*Variable command*/
+			case VARIABLE:
+				varopType=varop(s);
+				break;
+
+			/*Print result*/
+			case '\n':
+				/*Dont print if:
+				  1. Any error
+			      2. Just a variable assignment was done
+				*/
+				if((error==NO_ERROR) && (varopType==NO_ASSIGN) )
+				{
+					result = pop();
+					/*Additional check for scenarios where user 
+					  just preses enter and ther is nothing to pop
+					*/
+					if(error==NO_ERROR)
+						printf("\t%.8g\n", recent_print = result);
+				}
+
+				/*Assume NO error and NO variable assignment in next line*/
+				error = NO_ERROR;
+				varopType=NO_ASSIGN;
+				break;
+
+			/*Unknown operator*/
+			default:
+				printf("error: unknown command: %s\n", s);
+				error = ERROR;
+				break;
+		}
+	}
+	/*Program ends*/
+	return 0;
+}
+
+/*Constants*/
+/*Max num of operands in stack*/
+#define MAXVAL 100
+
+/*External variables*/
+/*Stack to store operands*/
+double val[MAXVAL];
+/*Stack pointer*/
+int sp=0;
+
+/*push() function definition*/
+/*This function pushes an element to the top of stack*/
+void push(double f)
+{
+	if(sp < MAXVAL)
+		val[sp++] = f;
+	else
+	{
+		printf("error: stack full, can't push %g\n", f);
+		error = ERROR;
+	}
+}
+
+/*pop() function definition*/
+/*This function pops the top element from stack*/
+double pop(void)
+{
+	if(sp > 0)
+		return val[--sp];
+	else
+	{
+		printf("error: stack empty\n");
+		error = ERROR;
+		return 0.0;
+	}
+}
+
+/*Header files*/
+#include<ctype.h>
+
+/*Function prototypes*/
+int getch(void);
+void ungetch(int);
+
+/*getop() function definition*/
+/*This function does this:
+  1. If an operator found, return the operator
+  2. Else if an operand found, store the operand in s[]
+     and return appropriate value to indicate it
+*/
+int getop(char s[])
+{
+	/*Variables*/
+	int i, c, d;
+	while((s[0]=c=getch()) == ' ' || c == '\t')
+		;
+	s[1]='\0';
+
+	/*Return if a primitive operator found*/
+	if(c=='+' || c=='*' || c=='/' || c=='%')
+		return c;
+
+	/*Return if - operator found*/
+	/*Also check the special case of negative number*/
+	/*else if(c=='-')*/
+		/*;*/
+	/*Return if stack operation command found*/
+	else if(c=='!' || c=='@' || c=='#' || c=='$')
+	{
+		if(isblank(d=getch()) || d=='\n')
+		{
+			ungetch(d);
+			return c;
+		}
+		else
+			ungetch(d);
+	}
+
+	/*If a number*/
+	else if(isdigit(c) || c=='.' || c=='-')
+	{
+		if(c=='-')
+		{
+			if(!isdigit(c=getch()) && c!='.')
+			{
+				ungetch(c);
+				return '-';
+			}
+			else
+			{
+				/*If a negative number, store the sign*/
+				s[0] = '-';
+				ungetch(c);
+			}
+		}
+		/*Prepare to store the number*/
+		i=0;
+		/*Collect the number*/
+		if(isdigit(c))
+			/*Collect the integer part*/
+			while(isdigit(s[++i] = c = getch()))
+				;
+		if(c=='.')
+			/*Collect the fraction part*/
+			while(isdigit(s[++i] = c = getch()))
+				;
+		s[i]='\0';
+		if(c != EOF)
+			ungetch(c);
+		/*Indicate a number in return*/
+		return NUMBER;
+	}
+	/*If a char, look for var expression or a math function*/
+	else if(isalpha(c) || c=='^')
+	{
+		/*Variable expression*/
+		if(isblank(c=getch()) || c=='=' || c=='\n')
+		{
+			ungetch(c);
+
+			/*Prepare to store the variable expression*/
+			i=0;
+			while(isblank(c=getch()))
+				;
+			if(c=='=')
+				s[++i]=c;
+			else
+			{
+				ungetch(c);
+				s[++i]='\0';
+				return VARIABLE;
+			}
+			while(isblank(c=getch()))
+				;
+			s[++i]=c;
+			while(!isblank(s[++i]=c=getch()) && c!='\n')
+				;
+			ungetch(c);
+			s[i]='\0';
+			return VARIABLE;
+		}
+		else
+			ungetch(c);
+
+		/*Prepare to store the ibrary math command*/
+		i=0;
+		while(!isblank(s[++i] = c = getch()) && c!='\n' && c!=EOF)
+			;
+		s[i]='\0';
+		if(c != EOF)
+			ungetch(c);
+		return MATH;
+	}
+	/*If not primitive math operator*/
+	/*If not start of a string starting with alpha*/
+	/*If not a number*/
+	else
+		return c;
+}
+
+/*Constants*/
+#define BUFSIZE 100
+
+/*External variables*/
+/*Buffer fot getch() and ungetch()*/
+char buf[BUFSIZE];
+/*Next free position in buffer*/
+int bufp=0;
+
+/*getch() function definition*/
+/*This function gets a (possibly pushed back) character*/
+int getch(void)
+{
+	return (bufp>0) ? buf[--bufp] : getchar();
+}
+
+/*ungetch() function definition*/
+/*This function pushes character back on input*/
+void ungetch(int c)
+{
+	if(bufp >= BUFSIZE)
+		printf("ungetch: too many characters\n");
+	else
+		buf[bufp++] = c;
+}
+
+/*stackop() function definition*/
+/*This function handles stack operation commands*/
+void stackop(int command)
+{
+	/*Automatic variables*/
+	double dupl, temp;
+	
+	/*Check the command*/
+	/*Different cases for different commands*/
+	switch(command)
+	{
+		/*Print top of the stack*/
+		case '!':
+			if(sp>0)
+				printf("Top of stack: %.8g\n", val[sp-1]);
+			else
+			{
+				printf("error: stack empty\n");
+				error = ERROR;
+			}
+			break;
+		/*Duplicate top of the stack*/
+		case '@':
+			if(sp>0)
+			{
+				dupl = val[sp-1];
+				push(dupl);
+			}
+			else
+			{
+				printf("error: stack empty\n");
+				error = ERROR;
+			}
+			break;
+		/*Swap top two elements of stack*/
+		case '#':
+			if(sp>1)
+			{
+				temp = val[sp-1];
+				val[sp-1] = val[sp-2];
+				val[sp-2] = temp;
+			}
+			else
+			{
+				printf("error: not enough element to swap\n");
+				error = ERROR;
+			}
+			break;
+		/*Clear the stack*/
+		case '$':
+			sp = 0;
+			break;
+		/*Negative case*/
+		/*If this prints then there is some bug(s)*/
+		default:
+			printf("error: unknow stack command %c\n", command);
+			error = ERROR;
+	}
+}
+
+/*lmath() function definition*/
+/*This function handles math functions from library*/
+void lmath(const char s[])
+{
+	/*Automatic variables*/
+	double op2;
+
+	/*Differnt math functions from <math.h>*/
+	/*Note: strcmp() is not used as it is not introduced*/
+	/*      +in K&R upto this point*/
+
+	/*sin*/
+	if(s[0]=='s' && s[1]=='i' && s[2]=='n' && s[3]=='\0')
+		push(sin(pop()));
+	/*cos*/
+	else if(s[0]=='c' && s[1]=='o' && s[2]=='s' && s[3]=='\0')
+		push(cos(pop()));
+	/*tan*/
+	else if(s[0]=='t' && s[1]=='a' && s[2]=='n' && s[3]=='\0')
+		push(tan(pop()));
+	/*asin*/
+	else if(s[0]=='a' && s[1]=='s' && s[2]=='i' && s[3]=='n' && s[4]=='\0')
+		push(asin(pop()));
+	/*acos*/
+	else if(s[0]=='a' && s[1]=='c' && s[2]=='o' && s[3]=='s' && s[4]=='\0')
+		push(acos(pop()));
+	/*atan*/
+	else if(s[0]=='a' && s[1]=='t' && s[2]=='a' && s[3]=='n' && s[4]=='\0')
+		push(atan(pop()));
+	/*atan2*/
+	else if(s[0]=='a' && s[1]=='t' && s[2]=='a' && s[3]=='n' && s[4]=='2' &&
+	        s[5]=='\0')
+	{
+		op2=pop();
+		push(atan2(pop(),op2));
+	}
+	/*sinh*/
+	else if(s[0]=='s' && s[1]=='i' && s[2]=='n' && s[3]=='h' && s[4]=='\0')
+		push(sinh(pop()));
+	/*cosh*/
+	else if(s[0]=='c' && s[1]=='o' && s[2]=='s' && s[3]=='h' && s[4]=='\0')
+		push(cosh(pop()));
+	/*tanh*/
+	else if(s[0]=='t' && s[1]=='a' && s[2]=='n' && s[3]=='h' && s[4]=='\0')
+		push(tanh(pop()));
+	/*exp*/
+	else if(s[0]=='e' && s[1]=='x' && s[2]=='p' && s[3]=='\0')
+		push(exp(pop()));
+	/*log*/
+	else if(s[0]=='l' && s[1]=='o' && s[2]=='g' && s[3]=='\0')
+		push(log(pop()));
+	/*log10*/
+	else if(s[0]=='l' && s[1]=='o' && s[2]=='g' && s[3]=='1' && s[4]=='0' &&
+	        s[5]=='\0')
+		push(log10(pop()));
+	/*pow*/
+	else if(s[0]=='p' && s[1]=='o' && s[2]=='w' && s[3]=='\0')
+	{
+		op2=pop();
+		push(pow(pop(),op2));
+	}
+	/*sqrt*/
+	else if(s[0]=='s' && s[1]=='q' && s[2]=='t' && s[3]=='t' && s[4]=='\0')
+		push(sqrt(pop()));
+	/*ceil*/
+	else if(s[0]=='c' && s[1]=='e' && s[2]=='i' && s[3]=='l' && s[4]=='\0')
+		push(ceil(pop()));
+	/*floor*/
+	else if(s[0]=='f' && s[1]=='l' && s[2]=='o' && s[3]=='o' && s[4]=='r' &&
+	        s[5]=='\0')
+		push(floor(pop()));
+	/*fabs*/
+	else if(s[0]=='f' && s[1]=='a' && s[2]=='b' && s[3]=='s' && s[4]=='\0')
+		push(fabs(pop()));
+	/*ldexp*/
+	else if(s[0]=='l' && s[1]=='d' && s[2]=='e' && s[3]=='x' && s[4]=='p' &&
+	        s[5]=='\0')
+	{
+		op2=pop();
+		push(ldexp(pop(), op2));
+	}
+	/*frexp*/
+	else if(s[0]=='f' && s[1]=='r' && s[2]=='e' && s[3]=='x' && s[4]=='p' &&
+		    s[5]=='\0')
+		/*To be implemented: Issue because a pointer is needed by frexp*/
+		;
+	/*modf*/
+	else if(s[0]=='m' && s[1]=='o' && s[2]=='d' && s[3]=='f' && s[4]=='\0')
+		/*To be implemented: Issue because a pointer is needed by modf*/
+		;
+	/*fmod*/
+	else if(s[0]=='f' && s[1]=='m' && s[2]=='o' && s[3]=='d' && s[4]=='\0')
+	{
+		op2=pop();
+		push(fmod(pop(), op2));
+	}
+	else
+	{
+		printf("error: unknown math command: %s\n", s);
+		error = ERROR;
+	}
+}
+
+/*External vriables*/
+/*To support variables in the calculator*/
+double v1=0,v2=0,v3=0,v4=0,v5=0,v6=0,v7=0,v8=0,v9=0,v10=0,v11=0,v12=0,v13=0,
+	   v14=0,v15=0,v16=0,v17=0,v18=0,v19=0,v20=0,v21=0,v22=0,v23=0,v24=0,v25=0,v26=0;
+
+/*Header files*/
+#include<string.h>
+
+/*Function prototypes*/
+double rhsvar(const char s[]);
+
+/*varop() function definition*/
+/*This funciton deals with the variables*/
+/*Both variable assignmentn and variable use*/
+/*Returns ASSIGN if assignment was done*/
+/*Returns NO_ASSIGN if NO assignment was done*/
+int varop(const char s[])
+{
+	/*Automatic variables*/
+	int opType;
+
+	/*If not a variable assignment*/
+	/*This means the variable is used in some-*/
+	/*+expression like 10 v + w -*/
+	/*_______________________________________________*/
+	/***STRANGE** isalpha(s[0]) is true when s[0]='^'*/
+	if((isalpha(s[0]) || s[0]=='^') && s[1]=='\0')
+	{
+		switch(s[0])
+		{
+			case 'a':
+				push(v1);
+				break;
+			case 'b':
+				push(v2);
+				break;
+			case 'c':
+				push(v3);
+				break;
+			case 'd':
+				push(v4);
+				break;
+			case 'e':
+				push(v5);
+				break;
+			case 'f':
+				push(v6);
+				break;
+			case 'g':
+				push(v7);
+				break;
+			case 'h':
+				push(v8);
+				break;
+			case 'i':
+				push(v9);
+				break;
+			case 'j':
+				push(v10);
+				break;
+			case 'k':
+				push(v11);
+				break;
+			case 'l':
+				push(v12);
+				break;
+			case 'm':
+				push(v13);
+				break;
+			case 'n':
+				push(v14);
+				break;
+			case 'o':
+				push(v15);
+				break;
+			case 'p':
+				push(v16);
+				break;
+			case 'q':
+				push(v17);
+				break;
+			case 'r':
+				push(v18);
+				break;
+			case 's':
+				push(v19);
+				break;
+			case 't':
+				push(v20);
+				break;
+			case 'u':
+				push(v21);
+				break;
+			case 'v':
+				push(v22);
+				break;
+			case 'w':
+				push(v23);
+				break;
+			case 'x':
+				push(v24);
+				break;
+			case 'y':
+				push(v25);
+				break;
+			case 'z':
+				push(v26);
+				break;
+			/*Recently printed value*/
+			case '^':
+				push(recent_print);
+				break;
+			default:
+				printf("error: unknown variable: %s\n", s);
+				error = ERROR;
+				break;
+		}
+		opType = NO_ASSIGN;
+	}
+
+	/*Else if variable is used for assigment such as:
+	  a=b
+	*/
+	else
+	{
+		/*Assign to appropriate variable*/
+		switch(s[0])
+		{
+			case 'a':
+				v1 = rhsvar(s);
+				break;
+			case 'b':
+				v2 = rhsvar(s);
+				break;
+			case 'c':
+				v3 = rhsvar(s);
+				break;
+			case 'd':
+				v4 = rhsvar(s);
+				break;
+			case 'e':
+				v5 = rhsvar(s);
+				break;
+			case 'f':
+				v6 = rhsvar(s);
+				break;
+			case 'g':
+				v7 = rhsvar(s);
+				break;
+			case 'h':
+				v8 = rhsvar(s);
+				break;
+			case 'i':
+				v9 = rhsvar(s);
+				break;
+			case 'j':
+				v10 = rhsvar(s);
+				break;
+			case 'k':
+				v11 = rhsvar(s);
+				break;
+			case 'l':
+				v12 = rhsvar(s);
+				break;
+			case 'm':
+				v13 = rhsvar(s);
+				break;
+			case 'n':
+				v14 = rhsvar(s);
+				break;
+			case 'o':
+				v15 = rhsvar(s);
+				break;
+			case 'p':
+				v16 = rhsvar(s);
+				break;
+			case 'q':
+				v17 = rhsvar(s);
+				break;
+			case 'r':
+				v18 = rhsvar(s);
+				break;
+			case 's':
+				v19 = rhsvar(s);
+				break;
+			case 't':
+				v20 = rhsvar(s);
+				break;
+			case 'u':
+				v21 = rhsvar(s);
+				break;
+			case 'v':
+				v22 = rhsvar(s);
+				break;
+			case 'w':
+				v23 = rhsvar(s);
+				break;
+			case 'x':
+				v24 = rhsvar(s);
+				break;
+			case 'y':
+				v25 = rhsvar(s);
+				break;
+			case 'z':
+				v26 = rhsvar(s);
+				break;
+			default:
+				printf("error: unknown variable used: %s\n",s);
+				error = ERROR;
+				break;
+		}
+		opType = ASSIGN;
+	}
+	return opType;
+}
+
+/*rhsvar() function definition*/
+/*This function returns the value of RHS*/
+double rhsvar(const char s[])
+{
+	/*Automatic variables*/
+	int i, j, c;
+	char tempstr[MAXOP];
+	
+	/*Skip the LHS and '='*/
+	i=0;
+	while((c=s[i++]) != '=' && c != '\0')
+		;
+
+	/*Skip the blanks after '=' and before RHS*/
+	while(isblank(s[i++]))
+		;
+
+	/*Positon i to first char of RHS*/
+	--i;
+
+	/*If RHS is a number*/
+	/*Caveat: A standalone blank ('.' or '-.') 
+	  is treated as '0.0'
+	*/
+	if(isdigit(s[i]) || s[i]=='-' || s[i]=='.')
+	{
+		/*Get the number in a temporary string*/
+		for(j=0; s[i] != '\0'; ++i, ++j)
+			tempstr[j] = s[i];
+		tempstr[j] = '\0';
+
+		/*Return the number*/
+		return atof(tempstr);
+	}
+
+	/*Else if RHS is NOT a number,
+	  treat it as a variable
+	*/
+	else
+	{
+		/*Get the variable in a temporary string*/
+		for(j=0; s[i] != '\0'; ++i, ++j)
+			tempstr[j] = s[i];
+		tempstr[j] = '\0';
+
+		/*If the RHS is not a single-*/
+		/*+character variable*/
+		if(strlen(tempstr) != 1)
+		{
+			printf("error: unknown variable %s\n", tempstr);
+			error = ERROR;
+			/*Caveat: If an error occurs while variable 
+			          assignemt, then the variable will 
+					  be assigned 0.0
+		    */
+			return 0.0;
+		}
+
+		/*If RHS a single character variable*/
+		else
+		{
+			switch(tempstr[0])
+			{
+				case 'a':
+					return v1;
+					break;
+				case 'b':
+					return v2;
+					break;
+				case 'c':
+					return v3;
+					break;
+				case 'd':
+					return v4;
+					break;
+				case 'e':
+					return v5;
+					break;
+				case 'f':
+					return v6;
+					break;
+				case 'g':
+					return v7;
+					break;
+				case 'h':
+					return v8;
+					break;
+				case 'i':
+					return v9;
+					break;
+				case 'j':
+					return v10;
+					break;
+				case 'k':
+					return v11;
+					break;
+				case 'l':
+					return v12;
+					break;
+				case 'm':
+					return v13;
+					break;
+				case 'n':
+					return v14;
+					break;
+				case 'o':
+					return v15;
+					break;
+				case 'p':
+					return v16;
+					break;
+				case 'q':
+					return v17;
+					break;
+				case 'r':
+					return v18;
+					break;
+				case 's':
+					return v19;
+					break;
+				case 't':
+					return v20;
+					break;
+				case 'u':
+					return v21;
+					break;
+				case 'v':
+					return v22;
+					break;
+				case 'w':
+					return v23;
+					break;
+				case 'x':
+					return v24;
+					break;
+				case 'y':
+					return v25;
+					break;
+				case 'z':
+					return v26;
+					break;
+				/*Recently printed value*/
+				case '^':
+					return recent_print;
+					break;
+				default:
+					printf("error: unknown variable: %s\n", s);
+					error = ERROR;
+					/*Caveat: If an error occurs while variable 
+							  assignemt, then the variable will 
+							  be assigned 0.0
+					*/
+					return 0.0;
+					break;
+			}
+		}
+	}
+}
+
+/*___*/
+/*EOF*/
